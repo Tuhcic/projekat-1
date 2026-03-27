@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="bs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>M-BIKEshop · Skener Barkoda</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --blue-deep:    #020B18;
+      --blue-dark:    #051D35;
+      --blue-mid:     #0A3560;
+      --blue-main:    #0F52A0;
+      --blue-bright:  #1A78E6;
+      --blue-glow:    #3B9EFF;
+      --blue-pale:    #A8D4FF;
+      --accent:       #00D4FF;
+      --white:        #F0F8FF;
+      --glass:        rgba(15, 82, 160, 0.15);
+      --glass-border: rgba(58, 158, 255, 0.25);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--blue-deep);
+      color: var(--white);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    /* ── Background mesh ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(26,120,230,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 80% at 80% 90%, rgba(0,212,255,0.10) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 40% at 50% 50%, rgba(10,53,96,0.5) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Grid overlay */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(58,158,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(58,158,255,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .wrap {
+      position: relative; z-index: 1;
+      width: 100%; max-width: 680px;
+      padding: 2rem 1.5rem 4rem;
+      display: flex; flex-direction: column; align-items: center; gap: 2rem;
+    }
+
+    /* ── Header ── */
+    header {
+      width: 100%;
+      display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+      padding-top: 1rem;
+      animation: fadeDown 0.8s ease both;
+    }
+
+    .logo-badge {
+      display: flex; align-items: center; gap: 0.6rem;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 999px;
+      padding: 0.4rem 1rem;
+      font-size: 0.75rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 500;
+      backdrop-filter: blur(10px);
+    }
+
+    .logo-badge span.dot {
+      width: 6px; height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 2s ease infinite;
+    }
+
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(2rem, 6vw, 3rem);
+      font-weight: 800;
+      line-height: 1.1;
+      text-align: center;
+      background: linear-gradient(135deg, var(--white) 30%, var(--blue-glow) 70%, var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      font-size: 0.95rem;
+      color: var(--blue-pale);
+      opacity: 0.8;
+      text-align: center;
+      font-weight: 300;
+    }
+
+    /* ── Camera Card ── */
+    .camera-card {
+      width: 100%;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      backdrop-filter: blur(16px);
+      overflow: hidden;
+      position: relative;
+      animation: fadeUp 0.8s 0.2s ease both;
+      box-shadow: 0 0 60px rgba(26,120,230,0.15), inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    .camera-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.1rem 1.4rem;
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .camera-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--blue-pale);
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+
+    .cam-icon {
+      width: 20px; height: 20px;
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 1.8;
+    }
+
+    .status-pill {
+      font-size: 0.72rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+    }
+
+    .status-pill.idle    { color: var(--blue-pale); border-color: var(--glass-border); }
+    .status-pill.active  { color: var(--accent); border-color: var(--accent); animation: pulse-border 1.5s ease infinite; }
+    .status-pill.found   { color: #4cffb0; border-color: #4cffb0; }
+
+    /* Camera viewport */
+    #camera-viewport {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4/3;
+      background: #010A14;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+    }
+
+    #camera-viewport video,
+    #camera-viewport canvas {
+      position: absolute; inset: 0;
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover;
+    }
+
+    #camera-viewport canvas { opacity: 0; }
+
+    /* Scan overlay */
+    .scan-overlay {
+      position: absolute; inset: 0; z-index: 2;
+      pointer-events: none;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .scan-frame {
+      width: 65%; aspect-ratio: 2.5/1;
+      position: relative;
+    }
+
+    .scan-frame::before, .scan-frame::after,
+    .scan-frame span::before, .scan-frame span::after {
+      content: '';
+      position: absolute;
+      width: 22px; height: 22px;
+      border-color: var(--accent);
+      border-style: solid;
+    }
+    .scan-frame::before  { top: 0; left: 0;  border-width: 2px 0 0 2px; }
+    .scan-frame::after   { top: 0; right: 0; border-width: 2px 2px 0 0; }
+    .scan-frame span::before { bottom: 0; left: 0;  border-width: 0 0 2px 2px; }
+    .scan-frame span::after  { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
+
+    .scan-line {
+      position: absolute;
+      left: 4px; right: 4px; top: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      border-radius: 2px;
+      box-shadow: 0 0 12px var(--accent);
+      animation: scanMove 2s ease-in-out infinite;
+    }
+
+    .scan-line.hidden { opacity: 0; }
+
+    /* Idle placeholder */
+    .cam-placeholder {
+      position: absolute; z-index: 1;
+      display: flex; flex-direction: column; align-items: center; gap: 1rem;
+      color: var(--blue-pale);
+      opacity: 0.5;
+    }
+    .cam-placeholder svg { width: 52px; height: 52px; stroke: var(--blue-glow); fill: none; stroke-width: 1.2; }
+    .cam-placeholder p { font-size: 0.85rem; }
+
+    /* ── Controls ── */
+    .controls {
+      padding: 1.2rem 1.4rem;
+      display: flex; gap: 0.75rem; flex-wrap: wrap;
+    }
+
+    .btn {
+      flex: 1; min-width: 120px;
+      padding: 0.8rem 1.2rem;
+      border-radius: 12px;
+      border: none;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+      transition: all 0.2s ease;
+      letter-spacing: 0.03em;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--blue-main), var(--blue-bright));
+      color: #fff;
+      box-shadow: 0 4px 24px rgba(26,120,230,0.4);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(26,120,230,0.55); }
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-secondary {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      color: var(--blue-pale);
+      backdrop-filter: blur(8px);
+    }
+    .btn-secondary:hover { border-color: var(--blue-glow); color: var(--white); }
+
+    .btn:disabled { opacity: 0.4; pointer-events: none; }
+
+    .btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; }
+
+    /* ── Result Card ── */
+    .result-card {
+      width: 100%;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      backdrop-filter: blur(16px);
+      overflow: hidden;
+      animation: fadeUp 0.5s ease both;
+      box-shadow: 0 0 40px rgba(0,212,255,0.1), inset 0 1px 0 rgba(255,255,255,0.06);
+      display: none;
+    }
+
+    .result-card.show { display: block; }
+
+    .result-header {
+      padding: 1rem 1.4rem;
+      border-bottom: 1px solid var(--glass-border);
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--accent);
+      display: flex; align-items: center; gap: 0.5rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .result-body { padding: 1.2rem 1.4rem; display: flex; flex-direction: column; gap: 1rem; }
+
+    .barcode-display {
+      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(58,158,255,0.15);
+      border-radius: 12px;
+      padding: 1rem 1.2rem;
+      display: flex; flex-direction: column; gap: 0.3rem;
+    }
+
+    .barcode-label { font-size: 0.7rem; color: var(--blue-pale); opacity: 0.7; letter-spacing: 0.1em; text-transform: uppercase; }
+    .barcode-value {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--white);
+      letter-spacing: 0.08em;
+      word-break: break-all;
+    }
+
+    .url-display {
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(58,158,255,0.12);
+      border-radius: 12px;
+      padding: 0.8rem 1rem;
+      font-size: 0.78rem;
+      color: var(--blue-glow);
+      word-break: break-all;
+      opacity: 0.8;
+      font-weight: 300;
+    }
+
+    .btn-open {
+      width: 100%;
+      padding: 1rem;
+      border-radius: 14px;
+      border: none;
+      background: linear-gradient(135deg, #0090cc, var(--accent));
+      color: #020B18;
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 0.6rem;
+      letter-spacing: 0.04em;
+      transition: all 0.25s ease;
+      box-shadow: 0 4px 24px rgba(0,212,255,0.3);
+    }
+    .btn-open:hover { transform: translateY(-3px); box-shadow: 0 10px 36px rgba(0,212,255,0.45); }
+    .btn-open svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; }
+
+    /* ── Manual input ── */
+    .manual-card {
+      width: 100%;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      backdrop-filter: blur(16px);
+      padding: 1.4rem;
+      animation: fadeUp 0.8s 0.4s ease both;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    .manual-card h3 {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--blue-pale);
+      margin-bottom: 1rem;
+      letter-spacing: 0.04em;
+    }
+
+    .input-row { display: flex; gap: 0.6rem; }
+
+    .barcode-input {
+      flex: 1;
+      padding: 0.85rem 1rem;
+      background: rgba(0,0,0,0.25);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      color: var(--white);
+      font-family: 'Syne', sans-serif;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .barcode-input::placeholder { color: rgba(168,212,255,0.3); font-weight: 400; letter-spacing: 0.02em; }
+    .barcode-input:focus { border-color: var(--blue-glow); box-shadow: 0 0 0 3px rgba(59,158,255,0.12); }
+
+    .btn-go {
+      padding: 0.85rem 1.4rem;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(135deg, var(--blue-main), var(--blue-bright));
+      color: #fff;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: flex; align-items: center; gap: 0.4rem;
+      transition: all 0.2s;
+      white-space: nowrap;
+      box-shadow: 0 4px 18px rgba(26,120,230,0.35);
+    }
+    .btn-go:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(26,120,230,0.5); }
+    .btn-go svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; }
+
+    /* ── Footer ── */
+    footer {
+      font-size: 0.75rem;
+      color: var(--blue-pale);
+      opacity: 0.35;
+      text-align: center;
+      padding-top: 0.5rem;
+    }
+
+    /* ── Animations ── */
+    @keyframes fadeDown  { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:none; } }
+    @keyframes fadeUp    { from { opacity:0; transform:translateY(20px);  } to { opacity:1; transform:none; } }
+    @keyframes scanMove  { 0%,100%{top:4px} 50%{top:calc(100% - 6px)} }
+    @keyframes pulse     { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    @keyframes pulse-border { 0%,100%{box-shadow:0 0 0 0 rgba(0,212,255,0.4)} 50%{box-shadow:0 0 0 5px rgba(0,212,255,0)} }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(10px);
+      background: rgba(0,212,255,0.12);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 0.65rem 1.4rem;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      opacity: 0;
+      transition: all 0.4s ease;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="logo-badge"><span class="dot"></span> M-BIKEshop · Pretraga</div>
+    <h1>Skener Barkoda</h1>
+    <p class="subtitle">Skenirajte barkod kamerom ili unesite ručno</p>
+  </header>
+
+  <!-- Camera Card -->
+  <div class="camera-card">
+    <div class="camera-header">
+      <div class="camera-title">
+        <svg class="cam-icon" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Kamera
+      </div>
+      <div class="status-pill idle" id="status-pill">Neaktivna</div>
+    </div>
+
+    <div id="camera-viewport">
+      <!-- quagga injects video here -->
+      <div class="cam-placeholder" id="placeholder">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>
+        <p>Pritisnite "Pokreni" za skeniranje</p>
+      </div>
+      <div class="scan-overlay" id="scan-overlay" style="display:none">
+        <div class="scan-frame">
+          <span></span>
+          <div class="scan-line" id="scan-line"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-primary" id="btn-start">
+        <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Pokreni kameru
+      </button>
+      <button class="btn btn-secondary" id="btn-stop" disabled>
+        <svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        Zaustavi
+      </button>
+    </div>
+  </div>
+
+  <!-- Result Card -->
+  <div class="result-card" id="result-card">
+    <div class="result-header">
+      <svg style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      Pronađen barkod
+    </div>
+    <div class="result-body">
+      <div class="barcode-display">
+        <span class="barcode-label">Kod</span>
+        <span class="barcode-value" id="barcode-result">—</span>
+      </div>
+      <div class="url-display" id="url-display">—</div>
+      <button class="btn-open" id="btn-open">
+        <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Otvori na M-BIKEshop-u
+      </button>
+    </div>
+  </div>
+
+  <!-- Manual Input -->
+  <div class="manual-card">
+    <h3>Ručni unos barkoda</h3>
+    <div class="input-row">
+      <input class="barcode-input" type="text" id="manual-input" placeholder="Unesite broj barkoda..." />
+      <button class="btn-go" id="btn-manual">
+        <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        Pretraži
+      </button>
+    </div>
+  </div>
+
+  <footer>© 2025 M-BIKEshop · Skener barkoda</footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const BASE_URL   = 'https://www.m-bikeshop.com/proizvodi/?search_q=';
+  const btnStart   = document.getElementById('btn-start');
+  const btnStop    = document.getElementById('btn-stop');
+  const btnOpen    = document.getElementById('btn-open');
+  const btnManual  = document.getElementById('btn-manual');
+  const statusPill = document.getElementById('status-pill');
+  const placeholder= document.getElementById('placeholder');
+  const scanOverlay= document.getElementById('scan-overlay');
+  const scanLine   = document.getElementById('scan-line');
+  const resultCard = document.getElementById('result-card');
+  const barcodeResult = document.getElementById('barcode-result');
+  const urlDisplay = document.getElementById('url-display');
+  const manualInput= document.getElementById('manual-input');
+  const toast      = document.getElementById('toast');
+
+  let scanning = false;
+  let lastCode = '';
+
+  function showToast(msg, duration=2800) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), duration);
+  }
+
+  function setStatus(state) {
+    statusPill.className = 'status-pill ' + state;
+    const labels = { idle:'Neaktivna', active:'Skeniranje…', found:'Pronađeno!' };
+    statusPill.textContent = labels[state] || state;
+  }
+
+  function displayResult(code) {
+    const url = BASE_URL + encodeURIComponent(code);
+    barcodeResult.textContent = code;
+    urlDisplay.textContent = url;
+    btnOpen.onclick = () => window.open(url, '_blank');
+    resultCard.classList.add('show');
+    resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function startScanner() {
+    if (scanning) return;
+    scanning = true;
+    lastCode = '';
+    placeholder.style.display = 'none';
+    scanOverlay.style.display = 'flex';
+    setStatus('active');
+    btnStart.disabled = true;
+    btnStop.disabled = false;
+
+    Quagga.init({
+      inputStream: {
+        type: 'LiveStream',
+        target: document.getElementById('camera-viewport'),
+        constraints: {
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      },
+      locator: { patchSize: 'medium', halfSample: true },
+      numOfWorkers: navigator.hardwareConcurrency || 2,
+      decoder: {
+        readers: [
+          'ean_reader', 'ean_8_reader', 'code_128_reader',
+          'code_39_reader', 'upc_reader', 'upc_e_reader',
+          'codabar_reader', 'i2of5_reader'
+        ]
+      },
+      locate: true
+    }, err => {
+      if (err) {
+        showToast('Greška: ' + (err.message || 'Kamera nije dostupna'));
+        stopScanner();
+        return;
+      }
+      Quagga.start();
+    });
+
+    Quagga.offDetected();
+    Quagga.onDetected(data => {
+      const code = data.codeResult.code;
+      if (!code || code === lastCode) return;
+      lastCode = code;
+
+      // flash scan line green briefly
+      scanLine.style.background = 'linear-gradient(90deg,transparent,#4cffb0,transparent)';
+      scanLine.style.boxShadow = '0 0 16px #4cffb0';
+      setTimeout(() => {
+        scanLine.style.background = '';
+        scanLine.style.boxShadow = '';
+      }, 800);
+
+      setStatus('found');
+      showToast('✓ Barkod skeniran: ' + code);
+      displayResult(code);
+      stopScanner();
+    });
+  }
+
+  function stopScanner() {
+    scanning = false;
+    Quagga.stop();
+    scanOverlay.style.display = 'none';
+    placeholder.style.display = 'flex';
+    setStatus('idle');
+    btnStart.disabled = false;
+    btnStop.disabled = true;
+  }
+
+  btnStart.addEventListener('click', startScanner);
+  btnStop.addEventListener('click', stopScanner);
+
+  btnManual.addEventListener('click', () => {
+    const code = manualInput.value.trim();
+    if (!code) { showToast('Unesite barkod'); return; }
+    displayResult(code);
+    window.open(BASE_URL + encodeURIComponent(code), '_blank');
+  });
+
+  manualInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') btnManual.click();
+  });
+</script>
+</body>
+</html>
