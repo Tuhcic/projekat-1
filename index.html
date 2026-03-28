@@ -404,6 +404,73 @@
     .btn-go:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(26,120,230,0.5); }
     .btn-go svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; }
 
+    /* ── Edit row ── */
+    .edit-row {
+      background: rgba(0,0,0,0.2);
+      border: 1px dashed rgba(58,158,255,0.25);
+      border-radius: 14px;
+      padding: 0.9rem 1rem;
+      display: flex; flex-direction: column; gap: 0.6rem;
+    }
+
+    .edit-label {
+      font-size: 0.75rem;
+      color: var(--blue-pale);
+      opacity: 0.7;
+      display: flex; align-items: center; gap: 0.4rem;
+      letter-spacing: 0.05em;
+    }
+
+    .edit-input-row { display: flex; gap: 0.5rem; }
+
+    .barcode-edit-input {
+      flex: 1;
+      padding: 0.65rem 0.9rem;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      color: var(--white);
+      font-family: 'Syne', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .barcode-edit-input::placeholder { color: rgba(168,212,255,0.25); font-weight: 400; }
+    .barcode-edit-input:focus { border-color: var(--blue-glow); box-shadow: 0 0 0 3px rgba(59,158,255,0.1); }
+
+    .btn-apply {
+      padding: 0.65rem 1rem;
+      border-radius: 10px;
+      border: none;
+      background: rgba(26,120,230,0.3);
+      border: 1px solid rgba(26,120,230,0.5);
+      color: var(--blue-pale);
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.82rem;
+      cursor: pointer;
+      display: flex; align-items: center; gap: 0.35rem;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-apply:hover { background: rgba(26,120,230,0.5); color: var(--white); border-color: var(--blue-glow); }
+    .btn-apply svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.5; }
+
+    /* Trim notice */
+    .trim-notice {
+      display: none;
+      font-size: 0.72rem;
+      color: #ffcc55;
+      background: rgba(255,200,60,0.08);
+      border: 1px solid rgba(255,200,60,0.2);
+      border-radius: 8px;
+      padding: 0.4rem 0.7rem;
+      margin-top: 0.2rem;
+    }
+    .trim-notice.show { display: block; }
+
     /* ── Footer ── */
     footer {
       font-size: 0.75rem;
@@ -493,9 +560,25 @@
     </div>
     <div class="result-body">
       <div class="barcode-display">
-        <span class="barcode-label">Kod</span>
+        <span class="barcode-label">Skenirani kod</span>
         <span class="barcode-value" id="barcode-result">—</span>
       </div>
+
+      <!-- Edit row -->
+      <div class="edit-row">
+        <div class="edit-label">
+          <svg style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;flex-shrink:0" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Uredi barkod ako je pogrešan:
+        </div>
+        <div class="edit-input-row">
+          <input class="barcode-edit-input" type="text" id="edit-input" placeholder="Izmijeni kod ovdje…" />
+          <button class="btn-apply" id="btn-apply">
+            <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            Primijeni
+          </button>
+        </div>
+      </div>
+
       <div class="url-display" id="url-display">—</div>
       <button class="btn-open" id="btn-open">
         <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
@@ -526,6 +609,7 @@
   const btnStart   = document.getElementById('btn-start');
   const btnStop    = document.getElementById('btn-stop');
   const btnOpen    = document.getElementById('btn-open');
+  const btnApply   = document.getElementById('btn-apply');
   const btnManual  = document.getElementById('btn-manual');
   const statusPill = document.getElementById('status-pill');
   const placeholder= document.getElementById('placeholder');
@@ -534,6 +618,7 @@
   const resultCard = document.getElementById('result-card');
   const barcodeResult = document.getElementById('barcode-result');
   const urlDisplay = document.getElementById('url-display');
+  const editInput  = document.getElementById('edit-input');
   const manualInput= document.getElementById('manual-input');
   const toast      = document.getElementById('toast');
 
@@ -552,14 +637,68 @@
     statusPill.textContent = labels[state] || state;
   }
 
-  function displayResult(code) {
+  // If code starts with "19", remove the last digit
+  function processCode(raw) {
+    if (raw.startsWith('19') && raw.length > 2) {
+      return { code: raw.slice(0, -1), trimmed: true };
+    }
+    return { code: raw, trimmed: false };
+  }
+
+  function updateResult(code) {
     const url = BASE_URL + encodeURIComponent(code);
     barcodeResult.textContent = code;
     urlDisplay.textContent = url;
     btnOpen.onclick = () => window.open(url, '_blank');
+  }
+
+  function displayResult(rawCode) {
+    const { code, trimmed } = processCode(rawCode);
+
+    // Show original scanned vs processed
+    barcodeResult.textContent = trimmed
+      ? rawCode + ' → ' + code
+      : code;
+
+    // Populate edit field with final (processed) code
+    editInput.value = code;
+
+    updateResult(code);
+
+    // Show trim notice if applicable
+    let notice = document.getElementById('trim-notice');
+    if (!notice) {
+      notice = document.createElement('div');
+      notice.id = 'trim-notice';
+      notice.className = 'trim-notice';
+      editInput.closest('.edit-row').appendChild(notice);
+    }
+    if (trimmed) {
+      notice.textContent = `⚠ Barkod počinje sa "19" — posljednja cifra (${rawCode.slice(-1)}) je automatski uklonjena.`;
+      notice.classList.add('show');
+    } else {
+      notice.classList.remove('show');
+    }
+
     resultCard.classList.add('show');
     resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
+
+  // Apply manual edit to the barcode
+  btnApply.addEventListener('click', () => {
+    const edited = editInput.value.trim();
+    if (!edited) { showToast('Unesite ispravan barkod'); return; }
+    barcodeResult.textContent = edited;
+    updateResult(edited);
+    // Hide trim notice since user manually confirmed
+    const notice = document.getElementById('trim-notice');
+    if (notice) notice.classList.remove('show');
+    showToast('✓ Barkod ažuriran');
+  });
+
+  editInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') btnApply.click();
+  });
 
   function startScanner() {
     if (scanning) return;
@@ -606,7 +745,6 @@
       if (!code || code === lastCode) return;
       lastCode = code;
 
-      // flash scan line green briefly
       scanLine.style.background = 'linear-gradient(90deg,transparent,#4cffb0,transparent)';
       scanLine.style.boxShadow = '0 0 16px #4cffb0';
       setTimeout(() => {
@@ -638,7 +776,8 @@
     const code = manualInput.value.trim();
     if (!code) { showToast('Unesite barkod'); return; }
     displayResult(code);
-    window.open(BASE_URL + encodeURIComponent(code), '_blank');
+    const { code: processed } = processCode(code);
+    window.open(BASE_URL + encodeURIComponent(processed), '_blank');
   });
 
   manualInput.addEventListener('keydown', e => {
